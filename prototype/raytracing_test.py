@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 def pos_vel_to_polar(x, y, z, dx, dy, dz):
     r = np.sqrt(x ** 2 + y ** 2 + z ** 2)
@@ -22,6 +23,10 @@ def pos_to_cartesian(r, theta, phi):
     z = r * np.cos(theta)
     
     return x, y, z
+
+def normalise_cartesian(x, y, z):
+    d = np.sqrt(x ** 2 + y ** 2 + z ** 2)
+    return x / d, y / d, z / d
 
 def christoffel_symbols(r, theta, phi, mass):
     """
@@ -58,7 +63,7 @@ def christoffel_symbols(r, theta, phi, mass):
         ]
     ]))
 
-def geodesic_leapfrog_step(pos, vel, daffine, mass):
+def geodesic_leapfrog_step(pos, vel, daffine, mass, with_inside_horizon=False):
     npos = pos + vel * daffine
     
     symbols = christoffel_symbols(pos[1], pos[2], pos[3], mass)
@@ -73,52 +78,73 @@ def geodesic_leapfrog_step(pos, vel, daffine, mass):
     nvel[:,inside_horizon] = vel[:,inside_horizon]
     npos[:,inside_horizon] = pos[:,inside_horizon]
     
+    if with_inside_horizon:
+        return npos, nvel, inside_horizon
     return npos, nvel
 
-mass = 1
-initial_pos = []
-vel = []
-rays = 12
-# Uniformly distributed rays from (3, 0)
-for i in range(rays):
-    r, theta, phi, dr, dtheta, dphi = pos_vel_to_polar(3, 0, 0, np.cos(2 * np.pi * i / rays), 0, np.sin(2 * np.pi * i / rays))
-    dt = np.sqrt(dr ** 2 / (1 - 2 * mass / r) ** 2 + r ** 2 / (1 - 2 * mass / r) * dtheta ** 2 + r ** 2 * np.sin(theta) ** 2 / (1 - 2 * mass / r) * dphi ** 2)
-    initial_pos.append([0, r, theta, phi])
-    vel.append([dt, dr, dtheta, dphi])
-# Some sideways rays along the x-axis
-for x in [2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 4.0]:
-    r, theta, phi, dr, dtheta, dphi = pos_vel_to_polar(x, 0, 0, 0, 0, 1)
-    dt = np.sqrt(dr ** 2 / (1 - 2 * mass / r) ** 2 + r ** 2 / (1 - 2 * mass / r) * dtheta ** 2 + r ** 2 * np.sin(theta) ** 2 / (1 - 2 * mass / r) * dphi ** 2)
-    initial_pos.append([0, r, theta, phi])
-    vel.append([dt, dr, dtheta, dphi])
+def disk_transparency_at(r):
+    return 1 / r / (1 / disk_min - 1 / disk_max) + 1 / (1 - disk_max / disk_min)
 
-steps = 2000
-daffine = 0.01
-initial_pos = np.array(initial_pos).T
-pos = np.empty((steps + 1, 4, initial_pos.shape[1]))
-pos[0] = initial_pos.copy()
-vel = np.array(vel).T
-for step in range(steps):
-    pos[step+1], vel = geodesic_leapfrog_step(pos[step], vel, daffine, mass)
+def colour_step(col, pos, npos):
+    disk_intersect = np.logical_and.reduce(((npos[2] - np.pi / 2) * (pos[2] - np.pi / 2) < 0, npos[1] >= disk_min, npos[1] <= disk_max))
+    transparency = disk_transparency_at(npos[1,disk_intersect])
+    for i in range(3):
+        col[i,disk_intersect] += disk_colour[i] * transparency * col[3,disk_intersect]
+    col[3,disk_intersect] -= transparency * col[3,disk_intersect]
+    
+    return col
+
+def colour_finalise(col, inside_horizon):
+    for i in range(3):
+        col[i,~inside_horizon] += sky_colour[i] * col[3,~inside_horizon]
+    col[3] = 0
+    
+    return col
+
+mass = 1
+disk_min = 8
+disk_max = 16
+disk_colour = (1, 0.5, 0)
+sky_colour = (0, 0, 0.2)
+size = (1000, 600)
+hfov = 90 * np.pi / 180
+vfov = hfov * size[1] / size[0]
+start_r = 20
+start_theta = np.pi / 2 - np.pi / 12
+start_phi = 0
+start_pos = (start_r * np.sin(start_theta), 0, start_r * np.cos(start_theta))
+
+j, i = np.mgrid[:size[1],:size[0]]
+dx = np.ones(size[0] * size[1])
+dy = np.sin(2 * (i.flatten() / size[0] - 0.5) * hfov)
+dz = np.sin(2 * (j.flatten() / size[1] - 0.5) * vfov)
+dx, dy, dz = normalise_cartesian(dx, dy, dz)
+dx, dz = dx * np.sin(start_theta) - dz * np.cos(start_theta), dz * np.sin(start_theta) + dx * np.cos(start_theta)
+dx, dy = dx * np.cos(start_phi) + dy * np.sin(start_phi), dy * np.cos(start_phi) - dx * np.sin(start_phi)
+initial_r, initial_theta, initial_phi, initial_dr, initial_dtheta, initial_dphi = pos_vel_to_polar(start_pos[0], start_pos[1], start_pos[2], dx, dy, dz)
+initial_dt = np.sqrt(initial_dr ** 2 / (1 - 2 * mass / initial_r) ** 2 + initial_r ** 2 / (1 - 2 * mass / initial_r) * initial_dtheta ** 2 + initial_r ** 2 * np.sin(initial_theta) ** 2 / (1 - 2 * mass / initial_r) * initial_dphi ** 2)
+
+steps = 1000
+daffine = -0.05
+pos = np.empty((steps + 1, 4, size[0] * size[1]))
+pos[0,0] = 0
+pos[0,1] = initial_r
+pos[0,2] = initial_theta
+pos[0,3] = initial_phi
+vel = np.array([initial_dt, initial_dr, initial_dtheta, initial_dphi])
+col = np.zeros((4, size[0] * size[1]))
+col[3] = 1
+inside_horizon = np.zeros(size[0] * size[1], dtype=bool)
+for step in tqdm(range(steps)):
+    pos[step+1], vel, inside_horizon = geodesic_leapfrog_step(pos[step], vel, daffine, mass, with_inside_horizon=True)
+    col = colour_step(col, pos[step], pos[step+1])
+col = colour_finalise(col, inside_horizon)
 
 x, y, z = pos_to_cartesian(pos[:,1], pos[:,2], pos[:,3])
-
+img = np.zeros((size[1], size[0], 3))
+for i in range(3):
+    img[:,:,i] = col[i].reshape((size[1], size[0]))
 plt.figure()
-gridspec = plt.gcf().add_gridspec(3, 5)
-plt.gcf().add_subplot(gridspec[:3,:3])
-plt.gca().add_patch(plt.Circle((0, 0), 2, color="black", fill=False))
-plt.gca().add_patch(plt.Circle((0, 0), 3, color="black", linestyle="--", fill=False))
-for i in range(pos.shape[2]):
-    plt.plot(x[:,i], z[:,i])
-plt.gca().set_aspect("equal", adjustable="box")
-plt.gcf().add_subplot(gridspec[0,3:])
-for i in range(pos.shape[2]):
-    plt.plot(x[:,i])
-plt.gcf().add_subplot(gridspec[1,3:])
-for i in range(pos.shape[2]):
-    plt.plot(y[:,i])
-plt.gcf().add_subplot(gridspec[2,3:])
-for i in range(pos.shape[2]):
-    plt.plot(z[:,i])
+plt.imshow(img)
 plt.gcf().set_tight_layout(True)
 plt.show()
