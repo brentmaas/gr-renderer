@@ -305,26 +305,30 @@ int main(int argc, char** argv){
     float cameraPosition[] = {startR * std::sin(startTheta) * std::cos(startPhi), startR * std::sin(startTheta) * std::sin(startPhi), startR * std::cos(startTheta)};
     float cameraRotation[] = {startTheta, startPhi};
     const float cameraFov = 70.0f * std::numbers::pi_v<float> / 180.0f;
+    bool stepsLock = false;
     
     const float mass = 1.0f;
     const float disk_min = 8.0f;
     const float disk_max = 16.0f;
-    const int steps = 1000;
+    int steps = 1000;
     const float dAffine = 0.05;
     
     const size_t dtStride = 200;
     size_t dtStep = 0;
     auto time = std::chrono::high_resolution_clock::now();
+    auto fpsTime = time;
     
     while(!glfwWindowShouldClose(window)){
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         
+        auto now = std::chrono::high_resolution_clock::now();
+        float dt = (now - time).count() / 1e9;
+        time = now;
         if(dtStep >= dtStride){
-            auto now = std::chrono::high_resolution_clock::now();
-            float dt = (now - time).count() / 1e9 / dtStep;
-            time = now;
+            float dtFps = (now - fpsTime).count() / 1e9 / dtStep;
+            fpsTime = now;
             dtStep = 0;
-            std::cout << "FPS: " << (1 / dt) << std::endl;
+            std::cout << "FPS: " << (1 / dtFps) << std::endl;
         }else{
             ++dtStep;
         }
@@ -333,7 +337,58 @@ int main(int argc, char** argv){
             glfwSetWindowShouldClose(window, GLFW_TRUE);
         }
         
-        // TODO: Camera controls
+        float speed = 2.0f;
+        if(glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) speed *= 5;
+        if(glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS) speed /= 5;
+        if(glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS){
+            cameraPosition[0] -= speed * std::cos(cameraRotation[1]) * dt;
+            cameraPosition[1] += speed * std::sin(cameraRotation[1]) * dt;
+        }
+        if(glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS){
+            cameraPosition[0] += speed * std::cos(cameraRotation[1]) * dt;
+            cameraPosition[1] -= speed * std::sin(cameraRotation[1]) * dt;
+        }
+        if(glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS){
+            cameraPosition[0] += speed * std::sin(cameraRotation[1]) * dt;
+            cameraPosition[1] += speed * std::cos(cameraRotation[1]) * dt;
+        }
+        if(glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS){
+            cameraPosition[0] -= speed * std::sin(cameraRotation[1]) * dt;
+            cameraPosition[1] -= speed * std::cos(cameraRotation[1]) * dt;
+        }
+        if(glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS){
+            cameraPosition[2] += speed * dt;
+        }
+        if(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS){
+            cameraPosition[2] -= speed * dt;
+        }
+        if(glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS){
+            cameraRotation[0] += speed * dt / 5;
+            if(cameraRotation[0] > std::numbers::pi_v<float>) cameraRotation[0] = std::numbers::pi_v<float>;
+        }
+        if(glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS){
+            cameraRotation[0] -= speed * dt / 5;
+            if(cameraRotation[0] < 0) cameraRotation[0] = 0;
+        }
+        if(glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS){
+            cameraRotation[1] += speed * dt / 5;
+        }
+        if(glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS){
+            cameraRotation[1] -= speed * dt / 5;
+        }
+        bool decreaseSteps = glfwGetKey(window, GLFW_KEY_MINUS) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_KP_SUBTRACT) == GLFW_PRESS;
+        bool increaseSteps = glfwGetKey(window, GLFW_KEY_EQUAL) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_KP_ADD) == GLFW_PRESS;
+        if(!stepsLock && steps > (int) (50 * speed) && decreaseSteps){
+            steps -= (int) (50 * speed);
+            stepsLock = true;
+            std::cout << "Steps: " << steps << std::endl;
+        }else if(!stepsLock && increaseSteps){
+            steps += (int) (50 * speed);
+            stepsLock = true;
+            std::cout << "Steps: " << steps << std::endl;
+        }else if(!(decreaseSteps || increaseSteps)){
+            stepsLock = false;
+        }
         
         glUseProgram(computeProgramId);
         glUniform3fv(glGetUniformLocation(computeProgramId, "cameraPosition"), 1, cameraPosition);
