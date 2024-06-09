@@ -5,13 +5,13 @@ from tqdm import tqdm
 def to_isotropic(x, y, z, dx, dy, dz, mass):
     r = np.sqrt(x ** 2 + y ** 2 + z ** 2)
     r_iso = (np.sqrt(r) + np.sqrt(r - 2 * mass)) ** 2 / 4
-    x_iso = x / (1 + mass / 2 / r_iso) ** 2
-    y_iso = y / (1 + mass / 2 / r_iso) ** 2
-    z_iso = z / (1 + mass / 2 / r_iso) ** 2
-    dx_iso = dx / (1 + mass / 2 / r_iso) ** 2
-    dy_iso = dy / (1 + mass / 2 / r_iso) ** 2
-    dz_iso = dz / (1 + mass / 2 / r_iso) ** 2
     f = mass / 2 / r_iso
+    x_iso = x / (1 + f) ** 2
+    y_iso = y / (1 + f) ** 2
+    z_iso = z / (1 + f) ** 2
+    dx_iso = dx / (1 + f) ** 2
+    dy_iso = dy / (1 + f) ** 2
+    dz_iso = dz / (1 + f) ** 2
     dt = np.sqrt((1 + f) ** 6 / (1 - f) ** 2 * (dx_iso ** 2 + dy_iso ** 2 + dz_iso ** 2))
     return x_iso, y_iso, z_iso, dx_iso, dy_iso, dz_iso, dt
 

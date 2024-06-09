@@ -1,0 +1,89 @@
+#version 460 core
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(rgba32f, binding = 0) uniform image2D destTex;
+layout(binding = 1) uniform sampler2D backgroundTex;
+
+uniform vec2 destSize;
+uniform vec2 backgroundSize;
+
+uniform vec3 cameraPosition;
+uniform vec3 cameraRotation;
+uniform float cameraHFov;
+
+uniform float mass;
+uniform int steps;
+uniform float dAffine;
+
+float pi = 3.141592;
+
+void christoffelSymbols(in vec4 position, out vec4 symbols[16]){
+    float r = length(position.xyz);
+    float factor = mass / r / r / r;
+    float factor_plus = 1 + mass / r / 2;
+    float factor_minus = 1 - mass / r / 2;
+    
+    symbols[0] = vec4(-position.xyz * factor / factor_plus, 0); // x, x
+    symbols[1] = vec4(-position.y * factor / factor_plus, position.x * factor / factor_plus, 0, 0); // x, y
+    symbols[2] = vec4(-position.z * factor / factor_plus, 0, position.x * factor / factor_plus, 0); // x, z
+    symbols[3] = vec4(0, 0, 0, position.x * factor * factor_minus / pow(factor_plus, 7)); // x, t
+    symbols[4] = vec4(position.y * factor / factor_plus, -position.x * factor / factor_plus, 0, 0); // y, x
+    symbols[5] = vec4(-position.xyz * factor / factor_plus, 0); // y, y
+    symbols[6] = vec4(0, -position.z * factor / factor_plus, position.y * factor / factor_plus, 0); // y, z
+    symbols[7] = vec4(0, 0, 0, position.y * factor * factor_minus / pow(factor_plus, 7)); // y, t
+    symbols[8] = vec4(position.z * factor / factor_plus, 0, -position.x * factor / factor_plus, 0); // z, x
+    symbols[9] = vec4(0, position.z * factor / factor_plus, -position.y * factor / factor_plus, 0); // z, y
+    symbols[10] = vec4(-position.xyz * factor / factor_plus, 0); // z, z
+    symbols[11] = vec4(0, 0, 0, position.z * factor * factor_minus / pow(factor_plus, 7)); // z, t
+    symbols[12] = vec4(0, 0, 0, position.x * factor / factor_minus); // t, x
+    symbols[13] = vec4(0, 0, 0, position.y * factor / factor_minus); // t, y
+    symbols[14] = vec4(0, 0, 0, position.z * factor / factor_minus); // t, z
+    symbols[15] = vec4(position.xyz * factor / factor_minus, 0); // t, t
+}
+
+void main(){
+    const ivec2 gid = ivec2(gl_GlobalInvocationID.xy);
+    if(any(greaterThanEqual(gid, destSize))) return;
+    
+    float cameraVFov = cameraHFov * destSize.y / destSize.x;
+    float viewTheta = 2 * (gid.y / destSize.y - 0.5) * cameraVFov;
+    float viewPhi = 2 * (gid.x / destSize.x - 0.5) * cameraHFov;
+    vec3 v = vec3(cos(viewTheta) * cos(viewPhi), cos(viewTheta) * sin(viewPhi), sin(viewTheta));
+    v.xz = vec2(v.x * sin(cameraRotation.x) - v.z * cos(cameraRotation.x), v.z * sin(cameraRotation.x) + v.x * cos(cameraRotation.x));
+    v.xy = vec2(v.x * cos(cameraRotation.y) + v.y * sin(cameraRotation.y), v.y * cos(cameraRotation.y) - v.x * sin(cameraRotation.y));
+    float r = length(cameraPosition);
+    float rIso = (sqrt(r) + sqrt(r - 2 * mass)) * (sqrt(r) + sqrt(r - 2 * mass)) / 4;
+    float f = mass / 2 / rIso;
+    vec4 position = vec4(cameraPosition.x / (1 + f) / (1 + f), cameraPosition.y / (1 + f) / (1 + f), cameraPosition.z / (1 + f) / (1 + f), 0);
+    vec3 velocityIso3 = v / (1 + f) / (1 + f);
+    vec4 velocity = vec4(velocityIso3, sqrt(pow(1 + f, 6) / (1 - f) / (1 - f) * dot(velocityIso3, velocityIso3)));
+    vec4 colour = vec4(0, 0, 0, 1);
+    float outside_horizon = 1.0;
+    
+    vec4 symbols[16];
+    vec4 dVelocity;
+    for(int i = 0;i < steps;++i){
+        outside_horizon = length((position - velocity * dAffine).xyz) <= mass / 2 ? 0.0 : 1.0;
+        position -= velocity * dAffine * outside_horizon;
+        christoffelSymbols(position, symbols);
+        dVelocity = vec4(0, 0, 0, 0);
+        for(int mu = 0;mu < 4;++mu){
+            for(int rho = 0;rho < 4;++rho){
+                dVelocity[mu] -= dot(symbols[4 * mu + rho], velocity) * velocity[rho];
+            }
+        }
+        velocity -= dVelocity * dAffine * outside_horizon;
+        
+        // TODO: Disk
+    }
+    
+    rIso = length(position.xyz);
+    f = 1 + mass / 2 / rIso;
+    vec3 velocity3 = velocity.xyz * f * f;
+    float theta = atan(velocity.z, length(velocity3.xy)) + pi / 2;
+    float phi = atan(velocity3.y, velocity3.x) + pi;
+    colour.xyz += texture(backgroundTex, vec2(phi / 2 / pi, theta / pi)).xyz * colour.w * outside_horizon;
+    
+    imageStore(destTex, gid, colour);
+}
