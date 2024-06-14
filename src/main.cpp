@@ -310,8 +310,8 @@ int main(int argc, char** argv){
     const float mass = 1.0f;
     const float disk_min = 8.0f;
     const float disk_max = 16.0f;
-    int steps = 1000;
-    const float dAffine = 0.05;
+    int steps = 500;
+    const float dAffineFactor = 0.05;
     
     const size_t dtStride = 200;
     size_t dtStep = 0;
@@ -398,7 +398,7 @@ int main(int argc, char** argv){
         glUniform1f(glGetUniformLocation(computeProgramId, "disk_min"), disk_min);
         glUniform1f(glGetUniformLocation(computeProgramId, "disk_max"), disk_max);
         glUniform1i(glGetUniformLocation(computeProgramId, "steps"), steps);
-        glUniform1f(glGetUniformLocation(computeProgramId, "dAffine"), dAffine);
+        glUniform1f(glGetUniformLocation(computeProgramId, "dAffineFactor"), dAffineFactor);
         glDispatchCompute(workgroupWidth, workgroupHeight, 1);
         glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
         

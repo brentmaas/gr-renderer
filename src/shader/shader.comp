@@ -14,7 +14,7 @@ uniform float cameraHFov;
 
 uniform float mass;
 uniform int steps;
-uniform float dAffine;
+uniform float dAffineFactor;
 
 float pi = 3.141592;
 
@@ -64,6 +64,7 @@ void main(){
     vec4 symbols[16];
     vec4 dVelocity;
     for(int i = 0;i < steps;++i){
+        float dAffine = dAffineFactor * sqrt(length(position.xyz) * 2 / mass);
         outside_horizon = length((position - velocity * dAffine).xyz) <= mass / 2 ? 0.0 : 1.0;
         position -= velocity * dAffine * outside_horizon;
         christoffelSymbols(position, symbols);
