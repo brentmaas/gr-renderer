@@ -18,6 +18,6 @@ cpp_args = [
 ]
 dependencies = [
     dependency('glfw3'),
-    dependency('jpeg')
+    dependency('libjpeg')
 ]
 executable('gr-renderer', source, include_directories: 'include', cpp_args: cpp_args, dependencies: dependencies)
