@@ -147,6 +147,31 @@ int loadJpeg(const unsigned char* data, const size_t length, std::vector<unsigne
 }
 
 int main(int argc, char** argv){
+    int width = 1200;
+    int height = 800;
+    bool borderless = false;
+    for(int i = 0;i < argc;++i){
+        if(!strcmp(argv[i], "--borderless")){
+            borderless = true;
+        }else if(!strcmp(argv[i], "--width") && i + 1 < argc){
+            int cliWidth = std::atoi(argv[i+1]);
+            if(cliWidth > 0){
+                width = cliWidth;
+            }
+        }else if(!strcmp(argv[i], "--height") && i + 1 < argc){
+            int cliHeight = std::atoi(argv[i+1]);
+            if(cliHeight > 0){
+                height = cliHeight;
+            }
+        }else if(!strcmp(argv[i], "--x11")){
+            if(glfwPlatformSupported(GLFW_PLATFORM_X11)){
+                glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11); // GLFW Wayland has issues with monitor scaling
+            }else{
+                std::cerr << "X11 not available" << std::endl;
+            }
+        }
+    }
+    
     if(!glfwInit()){
         std::cerr << "GLFW initialisation failed" << std::endl;
         return 1;
@@ -160,24 +185,6 @@ int main(int argc, char** argv){
     
     GLFWmonitor* monitor = glfwGetPrimaryMonitor();
     const GLFWvidmode* vidmode = glfwGetVideoMode(monitor);
-    int width = 1200;
-    int height = 800;
-    bool borderless = false;
-    for(int i = 0;i < argc;++i){
-        if(!strcmp(argv[i], "--borderless")){
-            borderless = true;
-        }else if(!strcmp(argv[i], "--width") && i + 1 < argc){
-            int cliWidth = std::atoi(argv[i+1]);
-            if(cliWidth > 0 and cliWidth < vidmode->width){
-                width = cliWidth;
-            }
-        }else if(!strcmp(argv[i], "--height") && i + 1 < argc){
-            int cliHeight = std::atoi(argv[i+1]);
-            if(cliHeight > 0 and cliHeight < vidmode->height){
-                height = cliHeight;
-            }
-        }
-    }
     
     if(borderless){
         width = vidmode->width;
@@ -186,6 +193,8 @@ int main(int argc, char** argv){
         glfwWindowHint(GLFW_GREEN_BITS, vidmode->greenBits);
         glfwWindowHint(GLFW_BLUE_BITS, vidmode->blueBits);
     }else{
+        width = width > vidmode->width ? vidmode->width : width;
+        height = height > vidmode->height ? vidmode->height : height;
         monitor = NULL;
     }
     GLFWwindow* window = glfwCreateWindow(width, height, "GR Renderer", monitor, NULL);

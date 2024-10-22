@@ -21,25 +21,26 @@ float pi = 3.141592;
 void christoffelSymbols(in vec4 position, out vec4 symbols[16]){
     float r = length(position.xyz);
     float factor = mass / r / r / r;
-    float factor_plus = 1 + mass / r / 2;
+    float one_over_factor_plus = 1 / (1 + mass / r / 2);
     float factor_minus = 1 - mass / r / 2;
+    float one_over_factor_minus = 1 / factor_minus;
     
-    symbols[0] = vec4(-position.xyz * factor / factor_plus, 0); // x, x
-    symbols[1] = vec4(-position.y * factor / factor_plus, position.x * factor / factor_plus, 0, 0); // x, y
-    symbols[2] = vec4(-position.z * factor / factor_plus, 0, position.x * factor / factor_plus, 0); // x, z
-    symbols[3] = vec4(0, 0, 0, position.x * factor * factor_minus / pow(factor_plus, 7)); // x, t
-    symbols[4] = vec4(position.y * factor / factor_plus, -position.x * factor / factor_plus, 0, 0); // y, x
-    symbols[5] = vec4(-position.xyz * factor / factor_plus, 0); // y, y
-    symbols[6] = vec4(0, -position.z * factor / factor_plus, position.y * factor / factor_plus, 0); // y, z
-    symbols[7] = vec4(0, 0, 0, position.y * factor * factor_minus / pow(factor_plus, 7)); // y, t
-    symbols[8] = vec4(position.z * factor / factor_plus, 0, -position.x * factor / factor_plus, 0); // z, x
-    symbols[9] = vec4(0, position.z * factor / factor_plus, -position.y * factor / factor_plus, 0); // z, y
-    symbols[10] = vec4(-position.xyz * factor / factor_plus, 0); // z, z
-    symbols[11] = vec4(0, 0, 0, position.z * factor * factor_minus / pow(factor_plus, 7)); // z, t
-    symbols[12] = vec4(0, 0, 0, position.x * factor / factor_minus); // t, x
-    symbols[13] = vec4(0, 0, 0, position.y * factor / factor_minus); // t, y
-    symbols[14] = vec4(0, 0, 0, position.z * factor / factor_minus); // t, z
-    symbols[15] = vec4(position.xyz * factor / factor_minus, 0); // t, t
+    symbols[0] = vec4(-position.xyz * factor * one_over_factor_plus, 0); // x, x
+    symbols[1] = vec4(-position.y * factor * one_over_factor_plus, position.x * factor * one_over_factor_plus, 0, 0); // x, y
+    symbols[2] = vec4(-position.z * factor * one_over_factor_plus, 0, position.x * factor * one_over_factor_plus, 0); // x, z
+    symbols[3] = vec4(0, 0, 0, position.x * factor * factor_minus * pow(one_over_factor_plus, 7)); // x, t
+    symbols[4] = vec4(position.y * factor * one_over_factor_plus, -position.x * factor * one_over_factor_plus, 0, 0); // y, x
+    symbols[5] = vec4(-position.xyz * factor * one_over_factor_plus, 0); // y, y
+    symbols[6] = vec4(0, -position.z * factor * one_over_factor_plus, position.y * factor * one_over_factor_plus, 0); // y, z
+    symbols[7] = vec4(0, 0, 0, position.y * factor * factor_minus * pow(one_over_factor_plus, 7)); // y, t
+    symbols[8] = vec4(position.z * factor * one_over_factor_plus, 0, -position.x * factor * one_over_factor_plus, 0); // z, x
+    symbols[9] = vec4(0, position.z * factor * one_over_factor_plus, -position.y * factor * one_over_factor_plus, 0); // z, y
+    symbols[10] = vec4(-position.xyz * factor * one_over_factor_plus, 0); // z, z
+    symbols[11] = vec4(0, 0, 0, position.z * factor * factor_minus * pow(one_over_factor_plus, 7)); // z, t
+    symbols[12] = vec4(0, 0, 0, position.x * factor * one_over_factor_minus); // t, x
+    symbols[13] = vec4(0, 0, 0, position.y * factor * one_over_factor_minus); // t, y
+    symbols[14] = vec4(0, 0, 0, position.z * factor * one_over_factor_minus); // t, z
+    symbols[15] = vec4(position.xyz * factor * one_over_factor_minus, 0); // t, t
 }
 
 void main(){
@@ -53,19 +54,20 @@ void main(){
     v.xz = vec2(v.x * sin(cameraRotation.x) - v.z * cos(cameraRotation.x), v.z * sin(cameraRotation.x) + v.x * cos(cameraRotation.x));
     v.xy = vec2(v.x * cos(cameraRotation.y) + v.y * sin(cameraRotation.y), v.y * cos(cameraRotation.y) - v.x * sin(cameraRotation.y));
     float r = length(cameraPosition);
-    float rIso = (sqrt(r) + sqrt(r - 2 * mass)) * (sqrt(r) + sqrt(r - 2 * mass)) / 4;
+    float rIso = (r + sqrt(r * r - 2 * mass * r) - mass) / 2;
     float f = mass / 2 / rIso;
-    vec4 position = vec4(cameraPosition.x / (1 + f) / (1 + f), cameraPosition.y / (1 + f) / (1 + f), cameraPosition.z / (1 + f) / (1 + f), 0);
-    vec3 velocityIso3 = v / (1 + f) / (1 + f);
-    vec4 velocity = vec4(velocityIso3, sqrt(pow(1 + f, 6) / (1 - f) / (1 - f) * dot(velocityIso3, velocityIso3)));
+    vec4 position = vec4(cameraPosition.xyz / ((1 + f) * (1 + f)), 0);
+    vec3 velocityIso3 = v / ((1 + f) * (1 + f));
+    vec4 velocity = vec4(velocityIso3, sqrt(pow(1 + f, 6) / ((1 - f) * (1 - f)) * dot(velocityIso3, velocityIso3)));
     vec4 colour = vec4(0, 0, 0, 1);
     float outside_horizon = 1.0;
     
     vec4 symbols[16];
     vec4 dVelocity;
+    float dAffineFactor_over_half_mass = dAffineFactor * 2 / mass;
     for(int i = 0;i < steps;++i){
-        float dAffine = dAffineFactor * sqrt(length(position.xyz) * 2 / mass);
-        outside_horizon = length((position - velocity * dAffine).xyz) <= mass / 2 ? 0.0 : 1.0;
+        float dAffine = dAffineFactor_over_half_mass * sqrt(length(position.xyz));
+        outside_horizon = length((position - velocity * dAffine).xyz) <= (0.5 * mass) ? 0.0 : 1.0;
         position -= velocity * dAffine * outside_horizon;
         christoffelSymbols(position, symbols);
         dVelocity = vec4(0, 0, 0, 0);
