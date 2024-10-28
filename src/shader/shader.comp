@@ -21,8 +21,8 @@ float pi = 3.141592;
 void christoffelSymbols(in vec4 position, out vec4 symbols[16]){
     float r = length(position.xyz);
     float factor = mass / r / r / r;
-    float one_over_factor_plus = 1 / (1 + mass / r / 2);
-    float factor_minus = 1 - mass / r / 2;
+    float one_over_factor_plus = 1 / (1 + 0.5 * mass / r);
+    float factor_minus = 1 - 0.5 * mass / r;
     float one_over_factor_minus = 1 / factor_minus;
     
     symbols[0] = vec4(-position.xyz * factor * one_over_factor_plus, 0); // x, x
@@ -47,46 +47,51 @@ void main(){
     const ivec2 gid = ivec2(gl_GlobalInvocationID.xy);
     if(any(greaterThanEqual(gid, destSize))) return;
     
-    float cameraVFov = cameraHFov * destSize.y / destSize.x;
-    float viewTheta = 2 * (gid.y / destSize.y - 0.5) * cameraVFov;
-    float viewPhi = 2 * (gid.x / destSize.x - 0.5) * cameraHFov;
-    vec3 v = vec3(cos(viewTheta) * cos(viewPhi), cos(viewTheta) * sin(viewPhi), sin(viewTheta));
-    v.xz = vec2(v.x * sin(cameraRotation.x) - v.z * cos(cameraRotation.x), v.z * sin(cameraRotation.x) + v.x * cos(cameraRotation.x));
-    v.xy = vec2(v.x * cos(cameraRotation.y) + v.y * sin(cameraRotation.y), v.y * cos(cameraRotation.y) - v.x * sin(cameraRotation.y));
-    float r = length(cameraPosition);
-    float rIso = (r + sqrt(r * r - 2 * mass * r) - mass) / 2;
-    float f = mass / 2 / rIso;
-    vec4 position = vec4(cameraPosition.xyz / ((1 + f) * (1 + f)), 0);
-    vec3 velocityIso3 = v / ((1 + f) * (1 + f));
-    vec4 velocity = vec4(velocityIso3, sqrt(pow(1 + f, 6) / ((1 - f) * (1 - f)) * dot(velocityIso3, velocityIso3)));
     vec4 colour = vec4(0, 0, 0, 1);
-    float outside_horizon = 1.0;
-    
-    vec4 symbols[16];
-    vec4 dVelocity;
-    float dAffineFactor_over_half_mass = dAffineFactor * 2 / mass;
-    for(int i = 0;i < steps;++i){
-        float dAffine = dAffineFactor_over_half_mass * sqrt(length(position.xyz));
-        outside_horizon = length((position - velocity * dAffine).xyz) <= (0.5 * mass) ? 0.0 : 1.0;
-        position -= velocity * dAffine * outside_horizon;
-        christoffelSymbols(position, symbols);
-        dVelocity = vec4(0, 0, 0, 0);
-        for(int mu = 0;mu < 4;++mu){
-            for(int rho = 0;rho < 4;++rho){
-                dVelocity[mu] -= dot(symbols[4 * mu + rho], velocity) * velocity[rho];
-            }
-        }
-        velocity -= dVelocity * dAffine * outside_horizon;
+    if(length(cameraPosition.xyz) > 2 * mass){
+        float cameraVFov = cameraHFov * destSize.y / destSize.x;
+        float viewTheta = 2 * (gid.y / destSize.y - 0.5) * cameraVFov;
+        float viewPhi = 2 * (gid.x / destSize.x - 0.5) * cameraHFov;
+        vec3 v = vec3(cos(viewTheta) * cos(viewPhi), cos(viewTheta) * sin(viewPhi), sin(viewTheta));
+        v.xz = vec2(v.x * sin(cameraRotation.x) - v.z * cos(cameraRotation.x), v.z * sin(cameraRotation.x) + v.x * cos(cameraRotation.x));
+        v.xy = vec2(v.x * cos(cameraRotation.y) + v.y * sin(cameraRotation.y), v.y * cos(cameraRotation.y) - v.x * sin(cameraRotation.y));
+        float r = length(cameraPosition);
+        float rIso = 0.5 * (r + sqrt(r * r - 2 * mass * r) - mass);
+        float f = 0.5 * mass / rIso;
+        vec4 position = vec4(cameraPosition.xyz / ((1 + f) * (1 + f)), 0);
+        vec3 velocityIso3 = v / ((1 + f) * (1 + f));
+        vec4 velocity = vec4(velocityIso3, sqrt(pow(1 + f, 6) / ((1 - f) * (1 - f)) * dot(velocityIso3, velocityIso3)));
         
-        // TODO: Disk
+        vec4 symbols[16];
+        vec4 dVelocity;
+        float dAffineFactor_over_half_mass = dAffineFactor * 2 / mass;
+        for(int i = 0;i < steps;++i){
+            float dAffine = dAffineFactor_over_half_mass * sqrt(length(position.xyz));
+            if(length((position - velocity * dAffine).xyz) <= (0.5 * mass)){
+                colour.w = 0;
+                break;
+            }
+            
+            position -= velocity * dAffine;
+            christoffelSymbols(position, symbols);
+            dVelocity = vec4(0, 0, 0, 0);
+            for(int mu = 0;mu < 4;++mu){
+                for(int rho = 0;rho < 4;++rho){
+                    dVelocity[mu] -= dot(symbols[4 * mu + rho], velocity) * velocity[rho];
+                }
+            }
+            velocity -= dVelocity * dAffine;
+            
+            // TODO: Disk
+        }
+        
+        rIso = length(position.xyz);
+        f = 1 + 0.5 * mass / rIso;
+        vec3 velocity3 = velocity.xyz * f * f;
+        float theta = atan(velocity.z, length(velocity3.xy)) + 0.5 * pi;
+        float phi = atan(velocity3.y, velocity3.x) + pi;
+        colour.xyz += texture(backgroundTex, vec2(0.5 * phi / pi, theta / pi)).xyz * colour.w;
     }
-    
-    rIso = length(position.xyz);
-    f = 1 + mass / 2 / rIso;
-    vec3 velocity3 = velocity.xyz * f * f;
-    float theta = atan(velocity.z, length(velocity3.xy)) + pi / 2;
-    float phi = atan(velocity3.y, velocity3.x) + pi;
-    colour.xyz += texture(backgroundTex, vec2(phi / 2 / pi, theta / pi)).xyz * colour.w * outside_horizon;
     
     imageStore(destTex, gid, colour);
 }
