@@ -14,6 +14,20 @@
 #include <cmath>
 #include <numbers>
 
+static const char vertexShaderSource[] = {
+    #embed "shader/shader.vert"
+};
+static const char fragmentShaderSource[] = {
+    #embed "shader/shader.frag"
+};
+static const char computeShaderSource[] = {
+    #embed "shader/shader.comp"
+};
+
+static const char panoramaData[] = {
+    #embed "../assets/milky_way_panorama.jpg"
+};
+
 int loadShaderSource(std::string& shaderSource, const char* shaderFile){
     std::ifstream shaderStream(shaderFile, std::ios::in);
     if(shaderStream.is_open()){
@@ -209,17 +223,7 @@ int main(int argc, char** argv){
     
     gladLoadGLLoader((GLADloadproc) glfwGetProcAddress);
     
-    // TODO: Replace with #embed when available in clang
-    std::string vertexShaderSource, fragmentShaderSource, computeShaderSource;
-    int vertexStatus = loadShaderSource(vertexShaderSource, "../src/shader/shader.vert");
-    int fragmentStatus = loadShaderSource(fragmentShaderSource, "../src/shader/shader.frag");
-    int computeStatus = loadShaderSource(computeShaderSource, "../src/shader/shader.comp");
-    if(vertexStatus || fragmentStatus || computeStatus){
-        glfwTerminate();
-        return 1;
-    }
-    
-    const char* computeShaderSources[1] = {computeShaderSource.c_str()};
+    const char* computeShaderSources[1] = {computeShaderSource};
     const GLuint computeShaderTypes[1] = {GL_COMPUTE_SHADER};
     GLuint computeProgramId = loadProgram(1, computeShaderSources, computeShaderTypes);
     if(!computeProgramId){
@@ -229,17 +233,10 @@ int main(int argc, char** argv){
     }
     glUseProgram(computeProgramId);
     
-    // TODO: Replace with #embed when available in clang
-    std::vector<unsigned char> panoramaData;
-    if(loadJpegData(panoramaData, "../assets/milky_way_panorama.jpg")){
-        glfwTerminate();
-        return 1;
-    }
-    
     std::vector<unsigned char> panorama;
     int widthPanorama, heightPanorama;
     bool hasAlphaPanorama;
-    if(loadJpeg(panoramaData.data(), panoramaData.size(), panorama, widthPanorama, heightPanorama, hasAlphaPanorama)){
+    if(loadJpeg(reinterpret_cast<const unsigned char*>(panoramaData), sizeof(panoramaData), panorama, widthPanorama, heightPanorama, hasAlphaPanorama)){
         glfwTerminate();
         return 1;
     }
@@ -251,7 +248,7 @@ int main(int argc, char** argv){
     int workgroupWidth = std::ceil((float) width / workgroupSize);
     int workgroupHeight = std::ceil((float) height / workgroupSize);
     
-    const char* drawShaderSources[2] = {vertexShaderSource.c_str(), fragmentShaderSource.c_str()};
+    const char* drawShaderSources[2] = {vertexShaderSource, fragmentShaderSource};
     const GLuint drawShaderTypes[2] = {GL_VERTEX_SHADER, GL_FRAGMENT_SHADER};
     GLuint drawProgramId = loadProgram(2, drawShaderSources, drawShaderTypes);
     if(!drawProgramId){

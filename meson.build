@@ -1,11 +1,10 @@
 project('gr-renderer', 'cpp', 'c')
 
-### For when #embed is merged into clang
-#compiler_c = meson.get_compiler('c')
-#compiler_cpp = meson.get_compiler('cpp')
-#if compiler_c.get_id() != 'clang' or compiler_cpp.get_id() != 'clang'
-#    error('Please use clang/clang++ as your compiler as it contains a required c++23 feature')
-#endif
+compiler_c = meson.get_compiler('c')
+compiler_cpp = meson.get_compiler('cpp')
+if compiler_c.get_id() != 'clang' or compiler_cpp.get_id() != 'clang'
+    error('Please use clang/clang++ as your compiler as it contains a required c++23 feature')
+endif
 
 source = [
     'src/glad.c',
