@@ -28,21 +28,6 @@ static const char panoramaData[] = {
     #embed "../assets/milky_way_panorama.jpg"
 };
 
-int loadShaderSource(std::string& shaderSource, const char* shaderFile){
-    std::ifstream shaderStream(shaderFile, std::ios::in);
-    if(shaderStream.is_open()){
-        std::stringstream stringStream;
-        stringStream << shaderStream.rdbuf();
-        shaderSource = stringStream.str();
-        shaderStream.close();
-    }else{
-        std::cerr << "Failed to open shader source file '" << shaderFile << "'" << std::endl;
-        return 1;
-    }
-    
-    return 0;
-}
-
 GLuint loadShader(const char* shaderSource, GLuint shaderType){
     GLuint shaderId = glCreateShader(shaderType);
     if(!shaderId){
