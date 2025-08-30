@@ -309,6 +309,10 @@ int main(int argc, char** argv){
     auto time = std::chrono::high_resolution_clock::now();
     auto fpsTime = time;
     
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    double mouseX, mouseY, prevMouseX, prevMouseY;
+    glfwGetCursorPos(window, &prevMouseX, &prevMouseY);
+    
     while(!glfwWindowShouldClose(window)){
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         
@@ -329,6 +333,7 @@ int main(int argc, char** argv){
         }
         
         float speed = 2.0f;
+        float mouseSpeed = 0.005f;
         if(glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) speed *= 5;
         if(glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS) speed /= 5;
         if(glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS){
@@ -353,20 +358,15 @@ int main(int argc, char** argv){
         if(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS){
             cameraPosition[2] -= speed * dt;
         }
-        if(glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS){
-            cameraRotation[0] += speed * dt / 5;
-            if(cameraRotation[0] > std::numbers::pi_v<float>) cameraRotation[0] = std::numbers::pi_v<float>;
-        }
-        if(glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS){
-            cameraRotation[0] -= speed * dt / 5;
-            if(cameraRotation[0] < 0) cameraRotation[0] = 0;
-        }
-        if(glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS){
-            cameraRotation[1] += speed * dt / 5;
-        }
-        if(glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS){
-            cameraRotation[1] -= speed * dt / 5;
-        }
+        
+        glfwGetCursorPos(window, &mouseX, &mouseY);
+        cameraRotation[0] += -mouseSpeed * (mouseY - prevMouseY);
+        if(cameraRotation[0] < 0) cameraRotation[0] = 0;
+        if(cameraRotation[0] > std::numbers::pi_v<float>) cameraRotation[0] = std::numbers::pi_v<float>;
+        cameraRotation[1] += -mouseSpeed * (mouseX - prevMouseX);
+        prevMouseX = mouseX;
+        prevMouseY = mouseY;
+        
         bool decreaseSteps = glfwGetKey(window, GLFW_KEY_MINUS) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_KP_SUBTRACT) == GLFW_PRESS;
         bool increaseSteps = glfwGetKey(window, GLFW_KEY_EQUAL) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_KP_ADD) == GLFW_PRESS;
         if(!stepsLock && steps > (int) (50 * speed) && decreaseSteps){
